@@ -2,7 +2,6 @@
 
 **Name:** Kushal Shrestha
 **Roll No:** 079BCT043
-**Department:** Electronics, Communication and Information Engineering (BEI)
 **Assignment:** FPGA Lab Assignment
 
 ---
