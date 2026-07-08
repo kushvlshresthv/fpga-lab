@@ -13,11 +13,13 @@
  *
  * We will assume this simple instruction format; 
  * Instruction[31:24] = OPCODE
- * Instruction[23:16] = unused
+ * Instruction[23:19] = unused
  * Instruction[18:16] = WRITEREG
- * Instruction[10:8] = READREG1
- * Instruction[2:0] = READREG2
- * Instruction[7:0] = Immediate value
+ * Instruction[15:11] = unusd
+ * Instruction[10:8]  = READREG1
+ * Instruction[7:3]   = unused/immediate upper bits
+ * Instruction[2:0]   = READREG2
+ * Instruction[7:0]   = Immediate value
  * 
  * We will support these instructions first: 
  *
@@ -56,6 +58,7 @@ module control_unit (
     localparam OP_XOR   = 8'b00000110;
     localparam OP_SLL   = 8'b00000111;
     localparam OP_SRL   = 8'b00001000;
+    localparam OP_NOP   = 8'b11111111;
 
     // ALU operation definitions
     localparam ALU_FORWARD = 3'b000; //just forward the input
@@ -194,6 +197,13 @@ module control_unit (
             OP_SRL: begin
                 writeenable     = 1'b1;
                 aluop           = ALU_SRL;
+                mux_imm_select  = 1'b0;
+                mux_reg2_select = 1'b0;
+            end
+
+            OP_NOP: begin
+                writeenable     = 1'b0;
+                aluop           = ALU_FORWARD;
                 mux_imm_select  = 1'b0;
                 mux_reg2_select = 1'b0;
             end

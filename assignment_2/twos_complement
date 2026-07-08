@@ -1,0 +1,26 @@
+#! /usr/bin/vvp
+:ivl_version "12.0 (stable)";
+:ivl_delay_selection "TYPICAL";
+:vpi_time_precision - 12;
+:vpi_module "/usr/lib64/ivl/system.vpi";
+:vpi_module "/usr/lib64/ivl/vhdl_sys.vpi";
+:vpi_module "/usr/lib64/ivl/vhdl_textio.vpi";
+:vpi_module "/usr/lib64/ivl/v2005_math.vpi";
+:vpi_module "/usr/lib64/ivl/va_math.vpi";
+S_0x561c6e965e50 .scope module, "twos_complement" "twos_complement" 2 2;
+ .timescale -9 -12;
+    .port_info 0 /INPUT 8 "in";
+    .port_info 1 /OUTPUT 8 "out";
+o0x7f76f64ef078 .functor BUFZ 8, C4<zzzzzzzz>; HiZ drive
+L_0x561c6e9654a0 .functor NOT 8, o0x7f76f64ef078, C4<00000000>, C4<00000000>, C4<00000000>;
+v0x561c6e965fe0_0 .net *"_ivl_0", 7 0, L_0x561c6e9654a0;  1 drivers
+L_0x7f76f64a6018 .functor BUFT 1, C4<00000001>, C4<0>, C4<0>, C4<0>;
+v0x561c6e986cc0_0 .net/2u *"_ivl_2", 7 0, L_0x7f76f64a6018;  1 drivers
+v0x561c6e986da0_0 .net "in", 7 0, o0x7f76f64ef078;  0 drivers
+v0x561c6e986e60_0 .net "out", 7 0, L_0x561c6e987030;  1 drivers
+L_0x561c6e987030 .arith/sum 8, L_0x561c6e9654a0, L_0x7f76f64a6018;
+# The file index is used to find the file name in the following table.
+:file_names 3;
+    "N/A";
+    "<interactive>";
+    "twos_complement.v";

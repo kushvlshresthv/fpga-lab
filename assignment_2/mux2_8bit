@@ -1,0 +1,32 @@
+#! /usr/bin/vvp
+:ivl_version "12.0 (stable)";
+:ivl_delay_selection "TYPICAL";
+:vpi_time_precision - 12;
+:vpi_module "/usr/lib64/ivl/system.vpi";
+:vpi_module "/usr/lib64/ivl/vhdl_sys.vpi";
+:vpi_module "/usr/lib64/ivl/vhdl_textio.vpi";
+:vpi_module "/usr/lib64/ivl/v2005_math.vpi";
+:vpi_module "/usr/lib64/ivl/va_math.vpi";
+S_0x5557916ec2a0 .scope module, "mux2_8bit" "mux2_8bit" 2 3;
+ .timescale -9 -12;
+    .port_info 0 /INPUT 8 "in0";
+    .port_info 1 /INPUT 8 "in1";
+    .port_info 2 /INPUT 1 "select";
+    .port_info 3 /OUTPUT 8 "out";
+o0x7f8b3a580108 .functor BUFZ 1, C4<z>; HiZ drive
+L_0x7f8b3a537018 .functor BUFT 1, C4<0>, C4<0>, C4<0>, C4<0>;
+L_0x55579170de00 .functor XNOR 1, o0x7f8b3a580108, L_0x7f8b3a537018, C4<0>, C4<0>;
+v0x5557916ec4a0_0 .net/2u *"_ivl_0", 0 0, L_0x7f8b3a537018;  1 drivers
+v0x55579170d930_0 .net *"_ivl_2", 0 0, L_0x55579170de00;  1 drivers
+o0x7f8b3a580078 .functor BUFZ 8, C4<zzzzzzzz>; HiZ drive
+v0x55579170d9f0_0 .net "in0", 7 0, o0x7f8b3a580078;  0 drivers
+o0x7f8b3a5800a8 .functor BUFZ 8, C4<zzzzzzzz>; HiZ drive
+v0x55579170dab0_0 .net "in1", 7 0, o0x7f8b3a5800a8;  0 drivers
+v0x55579170db90_0 .net "out", 7 0, L_0x55579170df40;  1 drivers
+v0x55579170dcc0_0 .net "select", 0 0, o0x7f8b3a580108;  0 drivers
+L_0x55579170df40 .functor MUXZ 8, o0x7f8b3a5800a8, o0x7f8b3a580078, L_0x55579170de00, C4<>;
+# The file index is used to find the file name in the following table.
+:file_names 3;
+    "N/A";
+    "<interactive>";
+    "mux2_8bit.v";
