@@ -1,0 +1,23 @@
+[dumpfile] "wave.vcd"
+[timestart] 0
+[size] 1200 700
+[pos] -1 -1
+[treeopen] rv32i_tb.
+@28
+rv32i_tb.clk
+rv32i_tb.reset
+@22
+rv32i_tb.pc[31:0]
+rv32i_tb.instruction[31:0]
+rv32i_tb.alu_result[31:0]
+rv32i_tb.write_back_data[31:0]
+@28
+rv32i_tb.reg_write
+rv32i_tb.mem_write
+@22
+rv32i_tb.x1[31:0]
+rv32i_tb.x2[31:0]
+rv32i_tb.x3[31:0]
+rv32i_tb.x19[31:0]
+rv32i_tb.x24[31:0]
+rv32i_tb.data_word_0[31:0]

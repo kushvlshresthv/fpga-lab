@@ -1,0 +1,541 @@
+What is Correlation Engine
+--------------------------
+
+
+Correlation Engine: part of our EDR that connnects multiple-low-level events and convert them into meanintful security findings. 
+
+eBPF gives us raw telemetry such as:
+
+`
+    Process executed
+    File opened
+    Network connection made
+    Privilege changed
+`
+
+But a single event usually does not prove an attack.
+
+For example:
+
+    > bash executed
+
+This alone may be normal.
+
+    > bash opened /etc/passwd
+
+This may still be normal.
+
+but
+
+    > bash was spawned by nginx, opened /etc/passwd, and then connected to an external IP
+
+now it becomes highly sus
+
+
+NOTE: Correlation engine converts Linux monitoring tool to Linux EDR prototye
+
+
+
+
+
+Input and Output of Correlation Engine
+--------------------------------------
+
+The correlation engine receives normalized events like: 
+
+`
+    Event Type: process_exec
+    Time: 10:30:01
+    PID: 2451
+    Process: bash
+    Executable: /usr/bin/bash
+    Parent PID: 900
+    Parent Process: nginx
+    User ID: 33
+`
+
+
+
+`
+    Event Type: file_open
+    Time: 10:30:05
+    PID: 2451
+    Process: bash
+    File Path: /etc/passwd
+    Access Mode: read
+`
+
+
+`
+    Event Type: network_connect
+    Time: 10:30:07
+    PID: 2480
+    Process: curl
+    Parent Process: bash
+    Destination IP: 45.33.32.156
+    Destination Port: 80
+`
+
+
+Then the correlation engine outputs: 
+
+`
+    Alert Name: Possible Web Shell Activity
+    Severity: Critical
+    Risk Score: 95
+
+    Evidence:
+    1. nginx spawned bash
+    2. bash opened /etc/passwd
+    3. child process curl connected to external IP
+`
+
+
+
+
+
+Correlation engine is stateful
+------------------------------
+
+It does not only look at the current event. It remebers recent activity
+
+It maintsis these internal records
+
+
+1. PROCESS TABLE
+
+stores info about processes that are currently activie or recently active
+
+we should not identify a process only by PID because Linux can reuse PIDs. So we use a more stable identity: 
+
+process_key = PID + process_start_time
+
+
+2. PROCESS TREE 
+
+shows the parent-child relationships
+
+nginx
+ └── bash
+      └── curl
+
+This is very important because attacks often happen across multiple related processes
+
+
+
+3. RECENT EVENT WINDOW
+
+The engine keeps recent events for a limited time
+
+Example: 
+
+    Keep events from the last 60 seconds.
+    Keep suspicious cases for 5 minutes.
+    Keep exited process information for 1–5 minutes.
+
+
+Because correlation depends on time. If process executes from /tmp AND makes network connection within 10 seconds -> THEN suspicious. But if the network connection happens after 5 hours, it may not be related
+
+
+
+
+
+4. ACTIVE SUSPICIOUS CASES
+
+Sometimes one eventt starts a suspicious case, but more eveidence comes later. 
+
+Example: 
+
+    nginx spawned bash
+
+
+This is suspicious, so the engine creates an active case: 
+
+    Case ID: case-001
+    Main Process: bash
+    Reason: Shell spawned by web server
+    Risk Score: 70
+    Status: Open
+
+
+Then later: 
+    
+    bash opens /etc/passwd
+
+The engine updates the same case: 
+
+    Case ID: case-001
+    New Evidence: bash opened /etc/passwd
+    Risk Score: 90
+    Status: Alert Generated
+
+
+5. Per-Process Event History
+6. Risk Score Table
+7. Allowlist / False Positive Rules
+
+
+
+
+
+
+
+High level pseudocode
+---------------------
+
+START Correlation Engine
+
+WHILE EDR is running:
+
+    RECEIVE next event from userspace event pipeline
+
+    NORMALIZE event into common format
+
+    ENRICH event with:
+        process name
+        executable path
+        parent process
+        user ID
+        process key
+        container ID if available
+
+    UPDATE internal state:
+        update process table
+        update process tree
+        store event in recent event window
+        store event in per-process history
+
+    CHECK correlation rules:
+        check same-process rules
+        check parent-child rules
+        check descendant-process rules
+        check sensitive-file rules
+        check network rules
+        check privilege-change rules
+        check aggregation rules
+
+    FOR each matched rule:
+        collect evidence
+        update risk score
+        update or create active case
+
+    IF risk score crosses alert threshold:
+        generate alert
+        attach evidence chain
+        attach process tree
+        assign severity
+        save alert
+
+    REMOVE old events and expired cases
+
+END WHILE
+
+
+
+
+
+Event Handling pseudocode
+-------------------------
+FUNCTION handle_event(event):
+
+    Step 1: Identify the process
+        Find process_key using PID and process start time
+
+    Step 2: Attach parent information
+        Find parent process using PPID and parent start time
+
+    Step 3: Update process state
+        If event is process execution:
+            add new process to process table
+            connect it to its parent in process tree
+
+        If event is process exit:
+            mark process as exited
+            keep its record temporarily
+
+        If event is file/network/privilege event:
+            attach event to the correct process history
+
+    Step 4: Store event
+        Add event to recent global window
+        Add event to that process's event history
+
+    Step 5: Run correlation logic
+        Compare current event with previous related events
+
+    Step 6: Generate alert if required
+
+END FUNCTION
+
+
+
+
+
+
+
+
+Same-process correlation
+-------------------------
+
+RULE: Temporary executable followed by network connection
+
+WHEN a network connection event is received:
+
+    FIND the process that made the connection
+
+    LOOK at recent events of the same process
+
+    IF same process executed from /tmp
+       AND network connection happened within 10 seconds:
+
+        CREATE rule match:
+            Rule Name: Temporary executable made outbound connection
+            Severity: High
+            Evidence:
+                execution event
+                network event
+
+        INCREASE risk score
+
+
+
+
+
+
+Parent-child correlation
+------------------------
+
+RULE: Web server spawned shell
+
+WHEN a process execution event is received:
+
+    GET current process name
+    GET parent process name
+
+    IF parent process is one of:
+        nginx, apache2, httpd, php-fpm
+
+    AND current process is one of:
+        sh, bash, dash, zsh
+
+    THEN:
+        CREATE suspicious case
+        ADD evidence:
+            parent process
+            child shell process
+
+        SET risk score to high
+
+
+
+
+Descendant-process correlation
+------------------------------
+
+This is more advanced than parent-child correlation.
+
+Sometimes the suspicious action is not done by the direct child. It is done by a grandchild or later descendant.
+
+nginx
+ └── bash
+      └── curl
+
+
+RULE: Suspicious process tree made external connection
+
+WHEN a network connection event is received:
+
+    FIND the process that made the connection
+
+    CHECK whether this process belongs to an existing suspicious process tree
+
+    IF the process is:
+        the original suspicious process
+        OR child of suspicious process
+        OR descendant of suspicious process
+
+    THEN:
+        ADD network event to the existing case
+        INCREASE risk score
+        IF score is critical:
+            GENERATE alert
+
+
+
+
+
+Sensitive file access correlation
+----------------------------------
+
+This type checks whether a suspicous process accessed sensitive files
+
+
+RULE: Suspicious process accessed sensitive file
+
+WHEN a file open event is received:
+
+    CHECK file path
+
+    IF file path is sensitive:
+
+        FIND the process that opened the file
+
+        CHECK whether process is already suspicious
+
+        IF process is already part of suspicious case:
+            ADD file event as evidence
+            INCREASE risk score significantly
+
+        ELSE IF process is not normally allowed to read this file:
+            CREATE new suspicious case
+            SET medium or high risk score
+
+
+
+
+Privilege-change correlation
+----------------------------
+
+This type checks whether a process suddenly gained more privileges.
+
+UID changed from 1000 to 0
+SUID bit added to a file
+A suspicious process executed a SUID binary
+Kernel module loaded unexpectedly
+
+Pseudocode
+
+RULE: Suspicious privilege escalation
+
+WHEN a privilege-related event is received:
+
+    FIND process identity
+
+    CHECK old privilege level
+    CHECK new privilege level
+
+    IF user changed from normal user to root:
+        CHECK whether process is trusted
+
+        IF process is not trusted:
+            CREATE critical rule match
+            ADD privilege-change event as evidence
+            INCREASE risk score
+
+    IF file permission changed to include SUID bit:
+        CHECK which process changed it
+
+        IF process is suspicious:
+            CREATE critical alert
+
+
+
+
+
+Aggregation-based correlation
+-----------------------------
+
+
+Some attacks are not detected by one specific sequence. They are detected by volume or repetition
+
+Example: 
+
+    Same process reads many sensitive files in 30 seconds.
+    Same process creates many outbound connections.
+    Same user launches many shells quickly.
+    Same process repeatedly fails to access protected files.
+
+
+
+Pseudocode: 
+
+RULE: Many sensitive files accessed quickly
+
+WHEN a file event is received:
+
+    FIND all file events from same process in last 30 seconds
+
+    COUNT how many sensitive files were accessed
+
+    IF count is greater than threshold:
+        CREATE alert:
+            possible credential discovery
+        ADD all related file events as evidence
+        INCREASE risk score
+
+
+
+
+Risk scoring pseudocode
+----------------------
+
+Instead of generating alerts immediately for every sus event, assign scores
+
+    Executable from /tmp: +25
+    Web server spawned shell: +60
+    External network connection: +25
+    Sensitive file access: +35
+    Privilege changed to root: +50
+    Known safe process: -30
+    Trusted destination IP: -15
+
+
+
+Pseudocode: 
+
+FUNCTION update_risk_score(case, rule_match):
+
+    ADD rule score to case score
+
+    IF event is from allowlisted process:
+        SUBTRACT allowlist score
+
+    IF destination is trusted:
+        SUBTRACT network trust score
+
+    IF process is already suspicious:
+        ADD chaining bonus
+
+    IF multiple suspicious events happened close together:
+        ADD time-window bonus
+
+    LIMIT final score between 0 and 100
+
+    RETURN final score
+
+
+
+
+False Positive Handling
+-----------------------
+
+Not every sus looking behavior is malicious
+
+    A backup script may read many files.
+    A package manager may execute scripts.
+    A system administrator may use curl.
+    A cron job may spawn shell scripts.
+
+So before alerting, the engine should check allowlists
+
+
+
+
+State cleanup psuedocode
+------------------------
+
+The engine must remove old data to avoid memory growth
+
+EVERY few seconds:
+
+    REMOVE events older than event window
+
+    REMOVE inactive cases older than case timeout
+
+    REMOVE exited process records after retention time
+
+    REMOVE old risk scores for inactive processes
+
+    KEEP alerts permanently in alert store
+
+
